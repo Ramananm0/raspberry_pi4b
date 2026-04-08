@@ -6,16 +6,22 @@ Start order:
   2. RPLidar A1           (/scan publisher)
   3. Robot State Publisher (URDF joint/link transforms for SLAM + RViz)
   4. Wheel odometry       (STM32 /wheel_ticks → /odom + /tf)
-  5. SLAM Toolbox         (/map + tf map→odom)
-  6. AI node              (terrain safety — passthrough until ML model ready)
-  7. Teleop               (keyboard drive via /cmd_vel_raw → /cmd_vel)
+  5. EKF (robot_localization)  (/odom + /imu/data → /odometry/filtered)
+  6. SLAM Toolbox         (/map + tf map→odom)
+  7. Traversability node  (/terrain/risk + /terrain/costmap)
+  8. AI safety node       (terrain risk → velocity scaling /cmd_vel)
+  9. Teleop               (keyboard drive via /cmd_vel_raw → /cmd_vel)
 
-Topics flow:
-  STM32 ──USB-TTL──► /imu/data          → AI node
-                   ► /wheel_ticks       → odom_node → /odom
-  RPLidar          ► /scan              → SLAM + AI node
-  Teleop           ► /cmd_vel_raw       → AI node
-  AI node          ► /cmd_vel           → (motor driver / future STM32 control)
+Full topic flow:
+  STM32 ──USB-TTL──► /imu/data        → EKF, traversability, AI
+                   ► /wheel_ticks     → odom_node → /odom
+                   ► /wheel_velocity  → (logging)
+  odom_node        ► /odom            → EKF
+  EKF              ► /odometry/filtered → SLAM (pose) + AI
+  RPLidar          ► /scan            → SLAM, traversability, AI
+  traversability   ► /terrain/risk    → AI node
+  Teleop           ► /cmd_vel_raw     → AI node
+  AI node          ► /cmd_vel         → (future: STM32 motor control)
 """
 
 from launch import LaunchDescription
@@ -50,7 +56,6 @@ def generate_launch_description():
     )
 
     # ── 3. Robot State Publisher ────────────────────────────────────
-    # Publishes URDF link/joint transforms so SLAM can find lidar_link
     rsp = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
@@ -65,7 +70,6 @@ def generate_launch_description():
     )
 
     # ── 4. Wheel odometry ──────────────────────────────────────────
-    # Accepts 2 values [LEFT, RIGHT] from STM32 encoder ticks
     odom = Node(
         package='terrain_odom',
         executable='odom_node',
@@ -83,7 +87,23 @@ def generate_launch_description():
         }],
     )
 
-    # ── 5. SLAM Toolbox ────────────────────────────────────────────
+    # ── 5. EKF — fuses /odom + /imu/data → /odometry/filtered ─────
+    # Reference: Moore & Stouch, IAS-13, 2014
+    ekf = Node(
+        package='robot_localization',
+        executable='ekf_node',
+        name='ekf_filter_node',
+        output='screen',
+        parameters=[
+            os.path.join(bringup_pkg, 'config', 'ekf.yaml'),
+            {'use_sim_time': False},
+        ],
+        remappings=[
+            ('odometry/filtered', '/odometry/filtered'),
+        ],
+    )
+
+    # ── 6. SLAM Toolbox ────────────────────────────────────────────
     slam = Node(
         package='slam_toolbox',
         executable='async_slam_toolbox_node',
@@ -95,8 +115,26 @@ def generate_launch_description():
         ],
     )
 
-    # ── 6. AI terrain node ─────────────────────────────────────────
-    # Reads /imu/data + /scan + /cmd_vel_raw, publishes /cmd_vel
+    # ── 7. Traversability node ─────────────────────────────────────
+    # Fuses /imu/data + /scan → /terrain/risk + /terrain/costmap
+    # Reference: Papadakis (2013), Thrun et al. (2006)
+    traversability = Node(
+        package='terrain_traversability',
+        executable='traversability_node',
+        name='terrain_traversability',
+        output='screen',
+        parameters=[{
+            'use_sim_time':      False,
+            'max_slope_rad':     0.524,     # 30°
+            'safe_dist_m':       0.50,
+            'fwd_cone_deg':      30.0,
+            'w_slope':           0.40,
+            'w_roughness':       0.20,
+            'w_proximity':       0.40,
+        }],
+    )
+
+    # ── 8. AI terrain safety node ──────────────────────────────────
     ai = Node(
         package='terrain_ai',
         executable='ai_node',
@@ -108,28 +146,32 @@ def generate_launch_description():
             'scan_topic':    '/scan',
             'cmd_in_topic':  '/cmd_vel_raw',
             'cmd_out_topic': '/cmd_vel',
-            'vmax':          0.0445,     # 44.5 mm/s max for RMCS-3070
-            'model_path':    '',         # set this when ML model is ready
+            'vmax':          0.0445,         # 44.5 mm/s (RMCS-3070 limit)
+            'alpha_vel':     0.85,
+            'beta_yaw':      0.60,
+            'r_stop':        0.85,           # emergency stop threshold
+            'model_path':    '',             # set this when ML model ready
         }],
     )
 
-    # ── 7. Keyboard teleop ─────────────────────────────────────────
-    # Publishes to /cmd_vel_raw → AI node scales it → /cmd_vel
+    # ── 9. Keyboard teleop ─────────────────────────────────────────
     teleop = Node(
         package='teleop_twist_keyboard',
         executable='teleop_twist_keyboard',
         name='teleop',
         output='screen',
         remappings=[('/cmd_vel', '/cmd_vel_raw')],
-        prefix='xterm -e',   # opens in separate terminal window
+        prefix='xterm -e',
     )
 
     return LaunchDescription([
         microros,
         rplidar,
         rsp,
-        TimerAction(period=2.0, actions=[odom]),    # wait for micro-ROS ready
-        TimerAction(period=3.0, actions=[slam]),     # wait for odom + RSP
-        TimerAction(period=3.0, actions=[ai]),
-        TimerAction(period=4.0, actions=[teleop]),   # last — user drives robot
+        TimerAction(period=2.0, actions=[odom]),            # wait for micro-ROS
+        TimerAction(period=2.5, actions=[ekf]),             # wait for odom
+        TimerAction(period=3.0, actions=[slam]),            # wait for odom+EKF
+        TimerAction(period=2.5, actions=[traversability]), # needs IMU+scan
+        TimerAction(period=3.0, actions=[ai]),              # needs traversability
+        TimerAction(period=4.0, actions=[teleop]),
     ])

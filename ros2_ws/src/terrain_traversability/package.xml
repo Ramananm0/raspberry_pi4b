@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>terrain_traversability</name>
+  <version>1.0.0</version>
+  <description>
+    Real-time terrain traversability assessment node.
+    Fuses RPLidar A1 (2D scan) and ICM-20948 IMU (via Madgwick AHRS)
+    to estimate slope risk, vibration roughness, and obstacle proximity.
+    Publishes composite risk score and local OccupancyGrid costmap.
+
+    References:
+      Papadakis (2013) Engineering Applications of AI 26(8):1373-1397
+      Thrun et al. (2006) Journal of Field Robotics 23(9):661-692
+      Brooks and Iagnemma (2005) IEEE Trans. Robotics 21(6):1185-1191
+  </description>
+  <maintainer email="ramana@terrain_bot">Ramana</maintainer>
+  <license>Apache-2.0</license>
+
+  <depend>rclpy</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>geometry_msgs</depend>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

@@ -1,0 +1,117 @@
+###############################################################################
+# ekf.yaml  —  robot_localization Extended Kalman Filter
+#
+# Fuses wheel odometry (/odom) + IMU (/imu/data) → /odometry/filtered
+#
+# State vector: [x, y, z, roll, pitch, yaw, ẋ, ẏ, ż, ṙoll, ṗitch, ẏaw,
+#                ẍ, ÿ, z̈]  (15-D)
+#
+# References:
+#   [1] Moore, T., Stouch, D. (2014). "A Generalized Extended Kalman Filter
+#       Implementation for the Robot Operating System." IAS-13. Springer.
+#   [2] Julier, S.J., Uhlmann, J.K. (1997). "A new extension of the Kalman
+#       filter to nonlinear systems." Proc. SPIE 3068.
+#
+# Sensor fusion strategy:
+#   /odom     → provides x, y, vx  (wheel kinematics, dead-reckoning)
+#   /imu/data → provides roll, pitch, yaw (Madgwick AHRS quaternion),
+#               gx, gy, gz (bias-corrected gyro),
+#               ax (forward acceleration, gravity-removed by driver)
+#
+# 2D mode: z, roll, pitch, ż, ṙoll, ṗitch, z̈ forced to zero/identity
+###############################################################################
+
+ekf_filter_node:
+  ros__parameters:
+
+    # ── Filter parameters ─────────────────────────────────────────────
+    frequency:        50.0          # Hz — matches ENC_PUB_PERIOD_MS (50Hz)
+    sensor_timeout:   0.1           # sec — drop sensor if stale > 100ms
+    two_d_mode:       true          # constrain to ground plane
+    print_diagnostics: true
+
+    # ── Frame IDs ─────────────────────────────────────────────────────
+    map_frame:        map
+    odom_frame:       odom
+    base_link_frame:  base_footprint
+    world_frame:      odom            # output in odom frame
+
+    # ── TF output ─────────────────────────────────────────────────────
+    publish_tf:       true
+    transform_time_offset: 0.0
+
+    # ── Sensor 0: wheel odometry ──────────────────────────────────────
+    # Config bitmask: [x, y, z, roll, pitch, yaw, vx, vy, vz,
+    #                  vroll, vpitch, vyaw, ax, ay, az]
+    # We trust odom for: x(0), y(1), vx(6)
+    odom0: /odom
+    odom0_config: [true,  true,  false,
+                   false, false, false,
+                   true,  false, false,
+                   false, false, false,
+                   false, false, false]
+    odom0_differential:        false   # absolute ticks, not differential
+    odom0_relative:            false
+    odom0_queue_size:          10
+    odom0_nodelay:             false
+    odom0_rejection_threshold: 5.0     # Mahalanobis distance threshold
+
+    # ── Sensor 1: ICM-20948 via Madgwick AHRS ─────────────────────────
+    # Config bitmask:
+    # orientation: roll(3), pitch(4), yaw(5)   ← from Madgwick quaternion
+    # angular vel: vroll(9), vpitch(10), vyaw(11)  ← bias-corrected gyro
+    # linear accel: ax(12)  ← forward only (noise on ay/az from vibration)
+    imu0: /imu/data
+    imu0_config: [false, false, false,
+                  true,  true,  true,
+                  false, false, false,
+                  true,  true,  true,
+                  true,  false, false]
+    imu0_differential:   false
+    imu0_relative:       false
+    imu0_queue_size:     10
+    imu0_nodelay:        false
+    imu0_remove_gravitational_acceleration: true
+    imu0_rejection_threshold: 5.0
+
+    # ── Process noise covariance Q ────────────────────────────────────
+    # Diagonal: [x, y, z, roll, pitch, yaw, vx, vy, vz,
+    #            vroll, vpitch, vyaw, ax, ay, az]
+    # Tuned for RMCS-3070 robot (slow, <50mm/s) on flat terrain.
+    # Higher values = trust prediction less, react faster to measurements.
+    process_noise_covariance: [
+      1.0e-3,  0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,
+      0.0,     1.0e-3,  0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,
+      0.0,     0.0,     1.0e-3,  0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,
+      0.0,     0.0,     0.0,     1.0e-3,  0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,
+      0.0,     0.0,     0.0,     0.0,     1.0e-3,  0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,
+      0.0,     0.0,     0.0,     0.0,     0.0,     1.0e-3,  0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,
+      0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     5.0e-4,  0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,
+      0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     5.0e-4,  0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,
+      0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     5.0e-4,  0.0,     0.0,     0.0,     0.0,     0.0,     0.0,
+      0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     1.0e-3,  0.0,     0.0,     0.0,     0.0,     0.0,
+      0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     1.0e-3,  0.0,     0.0,     0.0,     0.0,
+      0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     1.0e-3,  0.0,     0.0,     0.0,
+      0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     1.0e-2,  0.0,     0.0,
+      0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     1.0e-2,  0.0,
+      0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     1.0e-2
+    ]
+
+    # ── Initial estimate covariance P0 ────────────────────────────────
+    initial_estimate_covariance: [
+      1.0e-9,  0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,
+      0.0,     1.0e-9,  0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,
+      0.0,     0.0,     1.0e-9,  0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,
+      0.0,     0.0,     0.0,     1.0e-9,  0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,
+      0.0,     0.0,     0.0,     0.0,     1.0e-9,  0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,
+      0.0,     0.0,     0.0,     0.0,     0.0,     1.0e-9,  0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,
+      0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     1.0e-9,  0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,
+      0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     1.0e-9,  0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,
+      0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     1.0e-9,  0.0,     0.0,     0.0,     0.0,     0.0,     0.0,
+      0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     1.0e-9,  0.0,     0.0,     0.0,     0.0,     0.0,
+      0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     1.0e-9,  0.0,     0.0,     0.0,     0.0,
+      0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     1.0e-9,  0.0,     0.0,     0.0,
+      0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     1.0e-9,  0.0,     0.0,
+      0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     1.0e-9,  0.0,
+      0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     0.0,     1.0e-9
+    ]
