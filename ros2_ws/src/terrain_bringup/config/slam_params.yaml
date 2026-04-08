@@ -12,7 +12,7 @@ slam_toolbox:
     # ── Frames ──────────────────────────────────────────────────────
     odom_frame:                 odom
     map_frame:                  map
-    base_frame:                 base_footprint
+    base_frame:                 base_footprint   # matches odom_node child_frame_id
     scan_topic:                 /scan
     use_map_saver:              false
 
