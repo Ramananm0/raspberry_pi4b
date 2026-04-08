@@ -1,0 +1,122 @@
+══════════════════════════════════════════════════════════════════════
+  USB-to-TTL RS232 Cable Wiring
+  STM32F746G-DISCO  ←──→  Raspberry Pi 4B
+══════════════════════════════════════════════════════════════════════
+
+Your cable: USB-to-TTL RS232 cable (CP2102 / CH340 / FT232 chip)
+  One end  → USB plug → Raspberry Pi USB port
+  Other end → 4 wires: TX (green), RX (white), GND (black), VCC (red)
+
+──────────────────────────────────────────────────────────────────────
+  Wiring (3 wires only — do NOT connect VCC)
+──────────────────────────────────────────────────────────────────────
+
+  Cable wire   │  Cable colour  │  Connect to STM32F746G-DISCO
+  ──────────── │  ────────────  │  ───────────────────────────────────
+  TX  (cable)  │  Green         │  PA10  (RX of STM32) — CN9 pin 5
+  RX  (cable)  │  White         │  PA9   (TX of STM32) — CN9 pin 3
+  GND (cable)  │  Black         │  GND                 — CN9 pin 2
+  VCC (cable)  │  Red           │  DO NOT CONNECT  ✗
+
+  Rule: TX goes to RX, RX goes to TX (always cross)
+        Cable TX  → STM32 RX  (PA10)
+        Cable RX  ← STM32 TX  (PA9)
+
+  USB plug → any USB-A port on Raspberry Pi 4B
+
+──────────────────────────────────────────────────────────────────────
+  Baud rate
+──────────────────────────────────────────────────────────────────────
+  STM32 UART1    : 2 000 000 baud  (set in CubeMX)
+  micro-ROS agent: 2 000 000 baud  (set in launch file)
+  These MUST match — both are already set to 2 Mbaud.
+
+──────────────────────────────────────────────────────────────────────
+  STM32 pin location on Discovery board
+──────────────────────────────────────────────────────────────────────
+
+  CN9 connector (Arduino-compatible, right side of board):
+
+    Pin 1  (top)
+    Pin 2  ← GND        connect BLACK wire here
+    Pin 3  ← PA9  TX    connect WHITE (cable RX) here
+    Pin 4
+    Pin 5  ← PA10 RX    connect GREEN (cable TX) here
+    ...
+
+  Tip: CN9 is the lower-right 10-pin header next to the LCD.
+       Pin 1 is marked with a triangle / dot on the PCB silkscreen.
+
+──────────────────────────────────────────────────────────────────────
+  RPLidar A1 connection
+──────────────────────────────────────────────────────────────────────
+  RPLidar A1 has its own USB cable (micro-USB or USB-A).
+  Plug it into a SECOND USB-A port on the Raspberry Pi.
+  It appears as /dev/rplidar (after udev rule is installed).
+
+──────────────────────────────────────────────────────────────────────
+  Raspberry Pi USB port assignment (recommended)
+──────────────────────────────────────────────────────────────────────
+
+  RPi4 USB ports (4 total: 2× USB2, 2× USB3):
+
+  USB3 (blue, top-left)   → USB-to-TTL cable  (STM32)  → /dev/stm32
+  USB3 (blue, top-right)  → RPLidar A1                 → /dev/rplidar
+  USB2 (black, bottom)    → reserved for keyboard/debug
+
+──────────────────────────────────────────────────────────────────────
+  Verify connection on Raspberry Pi
+──────────────────────────────────────────────────────────────────────
+
+  After plugging in both devices:
+
+    lsusb                       # should show CP2102/CH340 twice or once each
+    ls /dev/stm32 /dev/rplidar  # both symlinks should exist
+
+  Test STM32 data (before running full ROS):
+    sudo apt install -y minicom
+    minicom -D /dev/stm32 -b 2000000
+    # You should see micro-ROS binary data when STM32 is running
+
+──────────────────────────────────────────────────────────────────────
+  Full system start
+──────────────────────────────────────────────────────────────────────
+
+  On Raspberry Pi 4B:
+    source /opt/ros/humble/setup.bash
+    source ~/raspberry_pi4b/ros2_ws/install/setup.bash
+    ros2 launch terrain_bringup bringup.launch.py
+
+  This starts:
+    1. micro-ROS agent  → bridges STM32 UART to ROS2
+    2. RPLidar A1       → publishes /scan
+    3. Wheel odometry   → publishes /odom  (from STM32 /wheel_ticks)
+    4. SLAM Toolbox     → publishes /map
+    5. AI node          → publishes /cmd_vel  (passthrough until model ready)
+
+══════════════════════════════════════════════════════════════════════
+  System Architecture
+══════════════════════════════════════════════════════════════════════
+
+  ┌──────────────────────────┐         ┌────────────────────────────┐
+  │   STM32F746G-DISCO       │         │   Raspberry Pi 4B          │
+  │   (Primary controller)   │         │   (High-level ROS2)        │
+  │                          │  USB-   │                            │
+  │  ICM-20948 IMU ──────────┼─ TTL  ──┼─► micro-ROS agent         │
+  │  4× RMCS-3070 encoders   │  cable  │     │                      │
+  │  Complementary filter    │  2Mbaud │     ├─► /imu/data          │
+  │  micro-ROS publisher     │         │     └─► /wheel_ticks       │
+  │                          │         │                            │
+  │  Future:                 │         │  RPLidar A1 ──► /scan      │
+  │   Motor PWM control      │         │  SLAM Toolbox ──► /map     │
+  │   On-board AI inference  │         │  Wheel odom ──► /odom      │
+  │                          │         │  AI node ──► /cmd_vel      │
+  └──────────────────────────┘         │  terrain_ws nodes          │
+                                       └────────────────────────────┘
+
+  Both boards run independently.
+  STM32 handles real-time sensor reading (< 0.2ms latency).
+  RPi4  handles SLAM, AI, path planning (full ROS2 ecosystem).
+  They talk ONLY via the USB-to-TTL cable using micro-ROS protocol.
+
+══════════════════════════════════════════════════════════════════════

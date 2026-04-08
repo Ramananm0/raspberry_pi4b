@@ -1,0 +1,12 @@
+# udev rule — RPLidar A1
+# Creates stable symlink:  /dev/rplidar
+# RPLidar A1 uses CP2102 internally (Silicon Labs USB-to-UART)
+
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", \
+    ATTRS{product}=="CP2102*", \
+    SYMLINK+="rplidar", MODE="0666", GROUP="dialout"
+
+# Fallback if product string differs — match by serial if needed:
+# SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", \
+#     ATTRS{serial}=="YOUR_SERIAL_HERE", \
+#     SYMLINK+="rplidar", MODE="0666", GROUP="dialout"

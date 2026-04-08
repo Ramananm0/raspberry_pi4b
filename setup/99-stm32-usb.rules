@@ -1,0 +1,29 @@
+# udev rule — STM32F7 via USB-to-TTL converter (CP2102 or CH340)
+# Creates stable symlink:  /dev/stm32
+#
+# To find your converter's idVendor / idProduct:
+#   1. Plug in the USB-to-TTL cable
+#   2. Run:  lsusb
+#   3. Look for: "CP210x" or "CH340" or "Prolific"
+#
+# Common vendor/product IDs:
+#   CP2102  :  10c4:ea60
+#   CH340   :  1a86:7523
+#   FT232   :  0403:6001
+#   PL2303  :  067b:2303
+
+# CP2102 (Silicon Labs) — most common with DISCO boards
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", \
+    SYMLINK+="stm32", MODE="0666", GROUP="dialout"
+
+# CH340 (WCH)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", \
+    SYMLINK+="stm32", MODE="0666", GROUP="dialout"
+
+# FTDI FT232
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", \
+    SYMLINK+="stm32", MODE="0666", GROUP="dialout"
+
+# Prolific PL2303
+SUBSYSTEM=="tty", ATTRS{idVendor}=="067b", ATTRS{idProduct}=="2303", \
+    SYMLINK+="stm32", MODE="0666", GROUP="dialout"
