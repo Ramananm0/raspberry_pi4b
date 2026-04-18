@@ -58,6 +58,19 @@ def generate_launch_description():
     xacro_file  = os.path.join(desc_pkg, 'urdf', 'terrain_bot.urdf.xacro')
 
     # ── 1. micro-ROS agent  (STM32 ↔ ROS2 bridge) ─────────────────────────────
+    # Skip micro_ros_agent if /dev/stm32 resolves to the same device as
+    # /dev/rplidar — that means the STM32 USB adapter isn't connected and
+    # opening /dev/stm32 would block the RPLidar port.
+    def _same_device(a, b):
+        try:
+            return os.path.realpath(a) == os.path.realpath(b)
+        except OSError:
+            return False
+
+    _stm32_present = (
+        os.path.exists('/dev/stm32') and
+        not _same_device('/dev/stm32', '/dev/rplidar')
+    )
     microros = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(bringup_pkg, 'launch', 'microros_agent.launch.py')))
@@ -239,7 +252,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         # Hardware bridges first
-        microros,
+        *([microros] if _stm32_present else []),
         rplidar,
         rsp,
         camera,
