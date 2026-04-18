@@ -31,11 +31,9 @@ from PIL import Image as PILImage
 
 from terrain_ai.terrain_inference import TerrainGridEngine
 
-try:
-    from cv_bridge import CvBridge
-    _CV_BRIDGE = True
-except ImportError:
-    _CV_BRIDGE = False
+# cv_bridge (ros-humble-cv-bridge) was compiled against NumPy 1.x and crashes
+# at import time on this Pi (NumPy 2.x installed).  Use pure numpy fallback.
+_CV_BRIDGE = False
 
 _MODEL_DIR_DEFAULT = os.path.expanduser('~/terrain_dataset/model')
 

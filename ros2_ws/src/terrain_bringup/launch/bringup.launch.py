@@ -144,21 +144,28 @@ def generate_launch_description():
         }],
     )
 
-    # ── 8. Camera Module 3  (/dev/video0 → /camera/image_raw) ────────────────
-    # Camera Module 3 uses IMX708 sensor via libcamera/v4l2
-    # Publishes at 30fps; terrain_ai_node throttles to 3Hz internally
+    # ── 8. Camera Module 3  (picamera2/libcamera → /camera/image_raw) ───────────
+    # IMX708 unicam needs media-controller pipeline; use picamera2 directly.
+    # PYTHONPATH must include /usr/local/lib/python3/dist-packages so that
+    # the RPi-fork libcamera Python bindings (not Ubuntu's empty stub) are found.
+    _cam_env = dict(os.environ)
+    _cam_env['PYTHONPATH'] = (
+        '/usr/local/lib/python3/dist-packages:'
+        '/usr/local/lib/python3.10/dist-packages:'
+        + _cam_env.get('PYTHONPATH', '')
+    )
     camera = Node(
-        package='v4l2_camera',
-        executable='v4l2_camera_node',
-        name='camera',
+        package='terrain_ai',
+        executable='terrain_camera_node',
+        name='terrain_camera_node',
         output='screen',
+        env=_cam_env,
         parameters=[{
-            'video_device':   '/dev/video0',
-            'image_size':     [640, 480],
-            'pixel_format':   'YUYV',
-            'camera_frame_id': 'camera_link',
+            'width':         640,
+            'height':        480,
+            'fps':           15,
+            'camera_topic':  '/camera/image_raw',
         }],
-        remappings=[('/image_raw', '/camera/image_raw')],
     )
 
     # ── 9. Terrain AI  (/camera/image_raw → EfficientNet-B4 → /terrain/*) ─────
@@ -230,17 +237,6 @@ def generate_launch_description():
         parameters=[{'use_sim_time': False}],
     )
 
-    # ── 13. Teleop keyboard  (manual drive → /cmd_vel_raw) ─────────────────────
-    # terrain_risk_node applies safety scaling on top of manual commands
-    teleop = Node(
-        package='teleop_twist_keyboard',
-        executable='teleop_twist_keyboard',
-        name='teleop',
-        output='screen',
-        remappings=[('/cmd_vel', '/cmd_vel_raw')],
-        prefix='xterm -e',
-    )
-
     return LaunchDescription([
         # Hardware bridges first
         microros,
@@ -263,7 +259,7 @@ def generate_launch_description():
         # Risk supervisor last (needs IMU + scan + camera speed_factor)
         TimerAction(period=4.0, actions=[terrain_risk]),
         TimerAction(period=4.5, actions=[data_logger]),
-
-        # Teleop in its own terminal
-        TimerAction(period=5.0, actions=[teleop]),
+        # Manual teleop: SSH in and run:
+        #   ros2 run teleop_twist_keyboard teleop_twist_keyboard \
+        #        --ros-args -r /cmd_vel:=/cmd_vel_raw
     ])

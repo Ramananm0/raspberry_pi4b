@@ -15,8 +15,9 @@ setup(
     zip_safe=True,
     entry_points={
         'console_scripts': [
-            'terrain_ai_node  = terrain_ai.terrain_ai_node:main',
+            'terrain_ai_node   = terrain_ai.terrain_ai_node:main',
             'terrain_path_node = terrain_ai.terrain_path_node:main',
+            'terrain_camera_node = terrain_ai.camera_node:main',
         ],
     },
 )
