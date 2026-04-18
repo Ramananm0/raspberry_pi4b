@@ -1,16 +1,21 @@
 <?xml version="1.0"?>
 <package format="3">
-  <name>terrain_odom</name>
+  <name>terrain_risk_layer</name>
   <version>1.0.0</version>
-  <description>Wheel odometry from STM32 encoder ticks</description>
+  <description>
+    Real-time terrain risk assessment for Raspberry Pi 4B.
+    Fuses IMU + LiDAR + camera AI to scale velocity commands
+    and trigger emergency stops.
+  </description>
   <maintainer email="ramananm9@gmail.com">Ramana</maintainer>
   <license>Apache-2.0</license>
 
   <depend>rclpy</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
   <depend>std_msgs</depend>
   <depend>nav_msgs</depend>
-  <depend>tf2_ros</depend>
-  <depend>geometry_msgs</depend>
+  <exec_depend>python3-numpy</exec_depend>
 
   <buildtool_depend>ament_python</buildtool_depend>
 

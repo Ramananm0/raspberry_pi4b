@@ -1,9 +1,12 @@
 <?xml version="1.0"?>
 <package format="3">
   <name>terrain_ai</name>
-  <version>1.0.0</version>
-  <description>AI terrain inference node for Raspberry Pi 4B</description>
-  <maintainer email="ramana@terrain_bot">Ramana</maintainer>
+  <version>2.0.0</version>
+  <description>
+    Camera-based terrain AI for Raspberry Pi 4B.
+    EfficientNet-B4 patch-grid classifier + terrain-aware path planner.
+  </description>
+  <maintainer email="ramananm9@gmail.com">Ramana</maintainer>
   <license>Apache-2.0</license>
 
   <depend>rclpy</depend>
@@ -11,6 +14,7 @@
   <depend>geometry_msgs</depend>
   <depend>std_msgs</depend>
   <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-pillow</exec_depend>
 
   <buildtool_depend>ament_python</buildtool_depend>
 

@@ -4,7 +4,7 @@ package_name = 'terrain_ai'
 
 setup(
     name=package_name,
-    version='1.0.0',
+    version='2.0.0',
     packages=[package_name],
     data_files=[
         ('share/ament_index/resource_index/packages',
@@ -15,7 +15,8 @@ setup(
     zip_safe=True,
     entry_points={
         'console_scripts': [
-            'ai_node = terrain_ai.ai_node:main',
+            'terrain_ai_node  = terrain_ai.terrain_ai_node:main',
+            'terrain_path_node = terrain_ai.terrain_path_node:main',
         ],
     },
 )

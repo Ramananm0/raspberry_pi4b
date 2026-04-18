@@ -13,7 +13,7 @@
       Thrun et al. (2006) Journal of Field Robotics 23(9):661-692
       Brooks and Iagnemma (2005) IEEE Trans. Robotics 21(6):1185-1191
   </description>
-  <maintainer email="ramana@terrain_bot">Ramana</maintainer>
+  <maintainer email="ramananm9@gmail.com">Ramana</maintainer>
   <license>Apache-2.0</license>
 
   <depend>rclpy</depend>

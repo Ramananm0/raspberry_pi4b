@@ -3,7 +3,7 @@
   <name>terrain_bringup</name>
   <version>1.0.0</version>
   <description>Launch files for terrain_bot on Raspberry Pi 4B</description>
-  <maintainer email="ramana@terrain_bot">Ramana</maintainer>
+  <maintainer email="ramananm9@gmail.com">Ramana</maintainer>
   <license>Apache-2.0</license>
 
   <exec_depend>rplidar_ros</exec_depend>
