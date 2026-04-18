@@ -19,7 +19,7 @@ Start order and data flow:
   /imu/data + /scan  ──► terrain_traversability  ──► /terrain/risk
                                                   ──► /terrain/costmap
 
-  /camera/image_raw  ──► terrain_ai_node (EfficientNet-B4 @ 3 Hz)
+  /camera/image_raw  ──► terrain_ai_node (EfficientNet-B4 @ 0.2 Hz)
                               ──► /terrain/detected
                               ──► /terrain/speed_factor
                               ──► /terrain/safety_level
@@ -162,8 +162,7 @@ def generate_launch_description():
     )
 
     # ── 9. Terrain AI  (/camera/image_raw → EfficientNet-B4 → /terrain/*) ─────
-    # rate_hz=3.0: 3 inferences/sec is sufficient on RPi4B CPU (no GPU)
-    # model_dir: copy best_model.pth + model_meta.json here after training
+    # rate_hz=0.2: B4 3×3 grid takes ~5s on Pi 4B ARM (ONNX Runtime, no GPU)
     terrain_ai = Node(
         package='terrain_ai',
         executable='terrain_ai_node',
@@ -172,7 +171,7 @@ def generate_launch_description():
         parameters=[{
             'use_sim_time':  False,
             'camera_topic':  '/camera/image_raw',
-            'rate_hz':       3.0,
+            'rate_hz':       0.2,
             'model_dir':     os.path.expanduser('~/terrain_dataset/model'),
         }],
     )

@@ -61,9 +61,9 @@ class TerrainAINode(Node):
 
         try:
             self.engine = TerrainGridEngine(model_dir=model_dir)
+            backend = type(self.engine._backend).__name__
             self.get_logger().info(
-                f'Model loaded from {model_dir}  '
-                f'arch=efficientnet_b4  device={self.engine.device}')
+                f'Model loaded from {model_dir}  arch=efficientnet_b4  backend={backend}')
         except Exception as e:
             self.get_logger().error(
                 f'Model load failed: {e}\n'
@@ -116,15 +116,28 @@ class TerrainAINode(Node):
             if _CV_BRIDGE and self.bridge:
                 cv_img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8')
                 return PILImage.fromarray(cv_img)
-            data   = np.frombuffer(msg.data, dtype=np.uint8)
-            if msg.encoding in ('bgr8', 'bgra8'):
-                img_np = data.reshape((msg.height, msg.width, -1))[:, :, :3]
-                img_np = img_np[:, :, ::-1].copy()
+            data = np.frombuffer(msg.data, dtype=np.uint8)
+            enc  = msg.encoding.lower()
+            if enc in ('bgr8',):
+                img_np = data.reshape((msg.height, msg.width, 3))[:, :, ::-1].copy()
+            elif enc in ('bgra8',):
+                img_np = data.reshape((msg.height, msg.width, 4))[:, :, 2::-1].copy()
+            elif enc in ('yuv422_yuy2', 'yuyv', 'yuyv422'):
+                # YUYV packed: 2 pixels per 4 bytes — convert via PIL
+                img_np = data.reshape((msg.height, msg.width, 2))
+                # Use PIL YCbCr conversion on Y channel as approximation
+                y  = img_np[:, :, 0].astype(np.float32)
+                u  = np.repeat(img_np[:, 0::2, 1].astype(np.float32), 2, axis=1) - 128
+                v  = np.repeat(img_np[:, 1::2, 1].astype(np.float32), 2, axis=1) - 128
+                r  = np.clip(y + 1.402 * v, 0, 255).astype(np.uint8)
+                g  = np.clip(y - 0.344136 * u - 0.714136 * v, 0, 255).astype(np.uint8)
+                b  = np.clip(y + 1.772 * u, 0, 255).astype(np.uint8)
+                img_np = np.stack([r, g, b], axis=2)
             else:
                 img_np = data.reshape((msg.height, msg.width, 3))
             return PILImage.fromarray(img_np)
         except Exception as e:
-            self.get_logger().warn(f'Image conversion failed: {e}')
+            self.get_logger().warn(f'Image conversion failed ({msg.encoding}): {e}')
             return None
 
     def _publish(self, result: dict):
