@@ -1,22 +1,18 @@
-# udev rule — STM32F7 via USB-to-TTL converter (CP2102 or CH340)
+# udev rule — STM32F7 via USB-to-TTL converter
 # Creates stable symlink:  /dev/stm32
 #
-# To find your converter's idVendor / idProduct:
-#   1. Plug in the USB-to-TTL cable
-#   2. Run:  lsusb
-#   3. Look for: "CP210x" or "CH340" or "Prolific"
+# NOTE: The RPLidar A1 also uses a CP2102 (10c4:ea60).
+# The rplidar rule (99-rplidar.rules) claims that device by product string.
+# The CP2102 entry here is excluded — add a serial-based rule once you know
+# your STM32 adapter's USB serial:
+#   udevadm info -n /dev/ttyUSB1 --attribute-walk | grep serial
 #
-# Common vendor/product IDs:
-#   CP2102  :  10c4:ea60
-#   CH340   :  1a86:7523
-#   FT232   :  0403:6001
-#   PL2303  :  067b:2303
+# To find your converter's idVendor / idProduct:
+#   1. Unplug RPLidar, plug in STM32 USB-TTL cable
+#   2. Run:  lsusb   and   ls /dev/ttyUSB*
+#   3. Run:  udevadm info -n /dev/ttyUSBx --attribute-walk | grep -E "Vendor|Product|serial"
 
-# CP2102 (Silicon Labs) — most common with DISCO boards
-SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", \
-    SYMLINK+="stm32", MODE="0666", GROUP="dialout"
-
-# CH340 (WCH)
+# CH340 (WCH) — common on cheap USB-TTL modules
 SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", \
     SYMLINK+="stm32", MODE="0666", GROUP="dialout"
 
@@ -27,3 +23,9 @@ SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", \
 # Prolific PL2303
 SUBSYSTEM=="tty", ATTRS{idVendor}=="067b", ATTRS{idProduct}=="2303", \
     SYMLINK+="stm32", MODE="0666", GROUP="dialout"
+
+# CP2102 with specific USB serial — fill in YOUR_SERIAL after running:
+#   udevadm info -n /dev/ttyUSBx --attribute-walk | grep ATTRS{serial}
+# SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", \
+#     ATTRS{serial}=="YOUR_SERIAL", \
+#     SYMLINK+="stm32", MODE="0666", GROUP="dialout"
